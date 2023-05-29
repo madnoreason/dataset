@@ -1,0 +1,83 @@
+#include <stdio.h>
+
+#define N 50
+
+_global_ void matrixMulKernel(float* a, float* b, float* c, int n) 
+{
+    int i = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n && j < n) {
+        float sum = 0.0f;
+        for (int k = 0; k < n; ++k) {
+            sum += a[i * n + k] * b[k * n + j];
+        }
+        c[i * n + j] = sum;
+    }
+}
+
+void matrixMul(float* a, float* b, float* c, int n) {
+    float *dev_a, *dev_b, *dev_c;
+    cudaMalloc((void**) &dev_a, n * n * sizeof(float));
+    cudaMalloc((void**) &dev_b, n * n * sizeof(float));
+    cudaMalloc((void**) &dev_c, n * n * sizeof(float));
+
+    cudaMemcpy(dev_a, a, n * n * sizeof(float), cudaMemcpyHostToDevice);
+    cudaMemcpy(dev_b, b, n * n * sizeof(float), cudaMemcpyHostToDevice);
+
+    dim3 threadsPerBlock(16, 16);
+    dim3 blocksPerGrid((n + threadsPerBlock.x - 1) / threadsPerBlock.x, (n + threadsPerBlock.y - 1) / threadsPerBlock.y);
+
+    matrixMulKernel<<<blocksPerGrid, threadsPerBlock>>>(dev_a, dev_b, dev_c, n);
+
+    cudaMemcpy(c, dev_c, n * n * sizeof(float), cudaMemcpyDeviceToHost);
+
+    cudaFree(dev_a);
+    cudaFree(dev_b);
+    cudaFree(dev_c);
+}
+
+int main() {
+    float *a, *b, *c;
+    a = (float*) malloc(N * N * sizeof(float));
+    b = (float*) malloc(N * N * sizeof(float));
+    c = (float*) malloc(N * N * sizeof(float));
+
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            a[i * N + j] = i * j;
+            b[i * N + j] = i + j;
+        }
+    }
+
+    printf("Input Matrix A:\n");
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            printf("%f ", a[i * N + j]);
+        }
+        printf("\n");
+    }
+
+    printf("Input Matrix B:\n");
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            printf("%f ", b[i * N + j]);
+        }
+        printf("\n");
+    }
+
+    matrixMul(a, b, c, N);
+
+    printf("Output Matrix C:\n");
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            printf("%f ", c[i * N + j]);
+        }
+        printf("\n");
+    }
+
+    free(a);
+    free(b);
+    free(c);
+
+    return 0;
+}
